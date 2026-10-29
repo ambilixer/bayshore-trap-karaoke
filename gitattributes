@@ -1,0 +1,7 @@
+# Line endings: text files are stored in the repository with LF and checked
+# out with the platform's own (CRLF on Windows). Git decides what is text.
+* text=auto
+
+# Images are never touched.
+*.png binary
+*.jpg binary

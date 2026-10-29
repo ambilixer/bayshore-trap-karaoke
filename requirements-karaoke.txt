@@ -1,0 +1,24 @@
+# Karaoke virtual environment: steps 2 and 3 (run_whisperx.py and
+# whisperx_to_ass.py). Python 3.11.
+#
+# Install PyTorch FIRST, from PyTorch's own index, so you get the CUDA build:
+#
+#   python -m pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+#
+# then this file:
+#
+#   python -m pip install -r requirements-karaoke.txt
+#
+# Installed the other way round, pip pulls a CPU-only torch from PyPI and
+# WhisperX falls back to the CPU: far slower, or an error with its default
+# settings. Afterwards, check:
+#
+#   python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+#
+# which should print 2.8.0+cu128 True.
+#
+# This is a different torch from the stems environment's, which is one reason
+# the two are kept apart. Versions are the ones the pipeline is run with.
+
+whisperx==3.8.5
+pyphen==0.17.2

@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<!--
+  Created by Andy Charlie W. (ambilixer) in collaboration with Claude (Anthropic).
+
+  btk_tap.html
+
+  Tap-timing tool, used in the browser between step 3 (whisperx_to_ass.py)
+  and the Aegisub pass. Play the song and tap each syllable as it is sung;
+  the tool retimes those lines from the taps and exports a new .ass. One
+  self-contained file: no install, no server, works offline.
+
+  Usage:
+    Open this file in a browser. Load the track's _subs.ass and its audio
+    (_original.wav), press space to play, and tap with J and K in turn; the
+    full key list is at the bottom of the page. "export .ass" downloads
+    <track>_subs-tap.ass. Then run
+      score_timing.py <track> --check --test subs-tap.ass
+    and take the file to Aegisub only once it reads EXPORT GATE: READY.
+    More in HOWTO.md.
+
+  Reads:   <track>_subs.ass (or an earlier _subs-tap.ass, to carry on a
+           pass) and the track's audio.
+  Writes:  <track>_subs-tap.ass, as a download. Lines left untapped keep
+           their timing and text; tapped lines get a new start, end and \kf
+           durations, and SYLFIX in the Effect field where the syllable
+           split needs fixing in Aegisub.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>btk tap timer</title>
+<style>
+  :root {
+    --bg: #090406; --fg: #d8ddda; --dim: #6e7a76; --lime: #b9de40;
+    --coral: #f76e64; --panel: #12090c; --rule: #241a1e; --ghost: #4a6ea8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 Consolas, "DejaVu Sans Mono", monospace;
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  }
+  header {
+    padding: 9px 16px; border-bottom: 1px solid var(--rule);
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  }
+  h1 { font-size: 14px; margin: 0; letter-spacing: 3px; color: var(--lime); font-weight: normal; }
+  label { color: var(--dim); font-size: 13px; }
+  input[type=file] { color: var(--dim); font: inherit; font-size: 12px; max-width: 200px; }
+  input[type=number] { width: 64px; background: #1a1114; color: var(--fg);
+    border: 1px solid var(--rule); padding: 3px 6px; font: inherit; }
+  button {
+    background: #1a1114; color: var(--fg); border: 1px solid var(--rule);
+    padding: 5px 12px; font: inherit; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--lime); color: var(--lime); }
+  button:disabled { opacity: .35; cursor: default; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #scrub {
+    position: relative; height: 26px; background: #0f0709; cursor: pointer;
+    border-bottom: 1px solid var(--rule); flex: none; user-select: none;
+  }
+  #played { position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+    background: #1b2a18; pointer-events: none; }
+  #ticks { position: absolute; inset: 0; pointer-events: none; }
+  #ticks i { position: absolute; top: 15px; bottom: 4px; width: 1px; background: var(--rule); }
+  #ticks i.bg { background: #3a2226; top: 19px; }
+  #ticks i.done { background: var(--lime); top: 12px; opacity: .8; }
+  #ticks i.cur { background: var(--coral); top: 4px; width: 2px; }
+  #head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg);
+    pointer-events: none; }
+  #stage { flex: 1; padding: 18px 28px; display: flex; flex-direction: column; min-width: 0; }
+  #sidebar {
+    width: 360px; border-left: 1px solid var(--rule); overflow-y: auto;
+    padding: 8px 0; background: var(--panel);
+  }
+  .row { padding: 3px 12px; font-size: 12.5px; cursor: pointer; display: flex; gap: 8px; }
+  .row:hover { background: #1a1114; }
+  .row.cur { background: #1f1519; border-left: 2px solid var(--lime); }
+  .row .s { width: 12px; flex: none; color: var(--dim); }
+  .row.done .s { color: var(--lime); }
+  .row .t { color: var(--dim); width: 46px; flex: none; }
+  .row .d { width: 58px; flex: none; text-align: right; color: var(--dim); }
+  .row.big .d { color: var(--coral); }
+  .row.small .d { color: var(--lime); }
+  .row .x { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row.bg .x { color: var(--coral); }
+  .row.low .x { border-bottom: 1px dotted var(--coral); }
+  .row.stale .t { color: var(--coral); }
+  #clock { color: var(--dim); font-size: 13px; margin-left: auto; }
+  #cal { color: var(--dim); font-size: 12px; }
+  #meta { color: var(--dim); font-size: 13px; letter-spacing: 1px; }
+  #verdict { font-size: 13px; min-height: 20px; margin-top: 2px; }
+  #active { font-size: 34px; line-height: 1.35; margin: 10px 0 2px; word-break: break-word; }
+  #active .syl { color: var(--dim); position: relative; }
+  #active .syl.ghost { color: var(--fg); background: #17212f; }
+  #active .syl.hit { color: var(--lime); background: none; }
+  #active .syl.next { border-bottom: 2px solid var(--coral); }
+  #deltas { font-size: 12px; color: var(--dim); min-height: 18px; letter-spacing: 1px; }
+  #upcoming { color: var(--dim); font-size: 19px; line-height: 1.55; margin-top: 14px; }
+  #upcoming .due { color: var(--coral); font-size: 13px; }
+  .row.sylfix { border-left: 3px solid #d98a2b; }
+  .row.sylfix .s { color: #d98a2b; }
+  #hint { border-top: 1px solid var(--rule); padding: 7px 28px; color: var(--dim); font-size: 12.5px; }
+  kbd { color: var(--fg); background: #1a1114; border: 1px solid var(--rule); padding: 0 5px; }
+  .ok { color: var(--lime); } .bad { color: var(--coral); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ßŧĸ TAP</h1><span id="build" style="color:var(--dim);font-size:12px"></span>
+  <label>subs <input type="file" id="fAss" accept=".ass"></label>
+  <label>audio <input type="file" id="fWav" accept="audio/*"></label>
+  <label>offset <input type="number" id="offset" value="0" step="10"> ms</label>
+  <label title="how long the last syllable lasts when you don't tap its end">hold <input type="number" id="hold" value="0.3" step="0.1" min="0.2"> s</label>
+  <label><input type="checkbox" id="autoCal" checked> auto-offset</label><span id="cal"></span>
+  <label>keep under <input type="number" id="thresh" value="80" step="10"> ms</label>
+  <button id="bExport" disabled>export .ass</button>
+  <span id="clock">--:-- / --:--  1.0x</span>
+</header>
+
+<div id="scrub" title="click or drag to seek">
+  <div id="ticks"></div><div id="played"></div><div id="head"></div>
+</div>
+
+<main>
+  <div id="stage">
+    <div id="meta">no file loaded</div>
+    <div id="active"></div>
+    <div id="deltas"></div>
+    <div id="verdict"></div>
+    <div id="upcoming"></div>
+  </div>
+  <div id="sidebar"></div>
+</main>
+
+<div id="hint">
+  <kbd>space</kbd> play/pause &nbsp; <kbd>J</kbd>/<kbd>K</kbd> tap (alternate; one extra tap = where the last note ends) &nbsp;
+  <kbd>enter</kbd> accept &nbsp; <kbd>N</kbd> keep existing &nbsp; <kbd>S</kbd> bad syllables: before tapping = tap by word + flag; after = flag only &nbsp; <kbd>backspace</kbd> undo &nbsp;
+  <kbd>R</kbd> redo line &nbsp; <kbd>P</kbd> prev &nbsp; <kbd>O</kbd> restart this line &nbsp; <kbd>-</kbd>/<kbd>=</kbd> seek 5s &nbsp;
+  <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> speed &nbsp; <kbd>F</kbd> follow on/off &nbsp; <kbd>D</kbd> debug &nbsp; <kbd>esc</kbd> unpin
+</div>
+
+<audio id="audio"></audio>
+
+<script>
+// ---8<--- CORE START (parsing / export; DOM-free so it can be tested headlessly)
+
+// Seconds per syllable used to estimate how much song a run of placeholder
+// lines must occupy. Deliberately fast (8 syl/s) so the estimate is a floor.
+const SYL_MIN = 0.12;
+// A line may start this far before the previous one and still be in order:
+// a BG line routinely starts just before the Main line it answers.
+const ORDER_TOL = 0.5;
+// Last syllable: how long it lasts when no end tap is given (the header's
+// "hold" box; this is its default), the floor, and how soon after the last
+// onset an end tap must land to count (anything sooner is a double-tap).
+const LAST_SYL_DEFAULT = 0.30;
+const LAST_SYL_MIN = 0.20;
+const END_TAP_MIN = 0.10;
+// Auto-offset needs this many syllables tapped near the script's timing first.
+const CAL_MIN_N = 30;
+
+function parseAss(text) {
+  const lines = text.replace(/^﻿/, "").split(/\r?\n/);
+  const head = [], events = [];
+  let inEvents = false;
+  for (const raw of lines) {
+    if (/^\[Events\]/i.test(raw)) { inEvents = true; head.push(raw); continue; }
+    if (!inEvents) { head.push(raw); continue; }
+    if (/^Format:/i.test(raw)) { head.push(raw); continue; }
+    const m = raw.match(/^(Dialogue|Comment):\s*(.*)$/);
+    if (!m) { if (raw.trim()) head.push(raw); continue; }
+    const f = m[2].split(",");
+    const text_ = f.slice(9).join(",");
+    const e = {
+      kind: m[1], layer: f[0], start: f[1], end: f[2], style: f[3],
+      actor: f[4], mL: f[5], mR: f[6], mV: f[7],
+      effect: (f[8] || "").replace(/\bSYLFIX\b/g, "").replace(/\s+/g, " ").trim(),
+      text: text_, syls: splitSyllables(text_),
+      start_s: assToSeconds(f[1]), end_s: assToSeconds(f[2]),
+      taps: null,
+      // Set by S: the syllable split is wrong, so this line needs hand work in
+      // Aegisub. Stored in the Effect field on export and read back here, so a
+      // resumed pass keeps its marks. The Lua macro blanks Effect on every
+      // event it emits, so this never reaches a render.
+      sylFlag: /\bSYLFIX\b/.test(f[8] || ""),
+    };
+    e.ghost = existingOnsets(e);
+    // Word boundaries: syllable k starts a word if it is first or the one
+    // before it ends in whitespace. Used by word mode (S).
+    e.wstarts = []; e.wordOf = [];
+    e.syls.forEach((s, k) => {
+      if (k === 0 || /\s$/.test(e.syls[k - 1].text)) e.wstarts.push(k);
+      e.wordOf.push(e.wstarts.length - 1);
+    });
+    e.wordMode = false;
+    events.push(e);
+  }
+  // NO SORT. The file is already in song order: whisperx_to_ass.py writes
+  // lyric order and Aegisub preserves it. Sorting by start time scrambles
+  // repeated choruses: WhisperX parks a whole unmatched block on one
+  // timestamp, so a sort pulls every BG line of the block to the front, every
+  // Main line after it, and mis-anchored lines far out of place.
+  events.forEach((e, i) => { e.i = i; });
+  markTrust(events);
+  return { head, events };
+}
+
+function splitSyllables(text) {
+  const out = [];
+  const re = /\{([^}]*)\}/g;
+  let last = 0, cur = null, m;
+  while ((m = re.exec(text)) !== null) {
+    const chunk = text.slice(last, m.index);
+    if (cur) { cur.text += chunk; out.push(cur); cur = null; }
+    else if (chunk) out.push({ dur_cs: null, text: chunk });
+    const k = m[1].match(/\\[kK][fo]?(\d+)/);
+    cur = k ? { dur_cs: parseInt(k[1], 10), text: "" } : null;
+    last = re.lastIndex;
+  }
+  const tail = text.slice(last);
+  if (cur) { cur.text += tail; out.push(cur); }
+  else if (tail) out.push({ dur_cs: null, text: tail });
+  return out.filter(s => s.text.length > 0);
+}
+
+// Absolute onset of each syllable under the timing already in the file.
+// This is the machine's answer, and what a tap is judged against.
+function existingOnsets(e) {
+  const on = [];
+  let t = e.start_s;
+  for (const s of e.syls) { on.push(t); t += (s.dur_cs || 0) / 100; }
+  return on;
+}
+
+function ksum(e) { return e.syls.reduce((a, s) => a + (s.dur_cs || 0), 0) / 100; }
+
+// A line WhisperX parked rather than placed: the whole karaoke sum is near zero.
+function isPlaceholder(e) { return ksum(e) < 0.2; }
+
+// Which lines' stored times are fiction. Two kinds:
+//   - placeholders (every syllable \kf1, all parked on one timestamp);
+//   - lines that come after a run of placeholders but start too early to
+//     leave room for it. WhisperX matches a repeated lyric to its FIRST
+//     occurrence, so the second chorus's closing lines arrive with the first
+//     chorus's times: real-looking durations, in the wrong place.
+// The room a placeholder run needs is estimated at SYL_MIN per Main syllable
+// (BG overlaps Main, so it adds nothing).
+function markTrust(events) {
+  let anchor = null, budget = 0;
+  for (const e of events) {
+    let fake = isPlaceholder(e);
+    if (!fake && anchor != null) {
+      if (e.start_s < anchor - ORDER_TOL) fake = true;
+      else if (budget > 0 && e.start_s < anchor + budget) fake = true;
+    }
+    e.untrusted = fake;
+    if (fake) { if (e.style !== "BG") budget += e.syls.length * SYL_MIN; }
+    else { anchor = e.start_s; budget = 0; }
+  }
+}
+
+function assToSeconds(t) {
+  const m = String(t).trim().match(/(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!m) return 0;
+  return (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]);
+}
+
+function secondsToAss(t) {
+  let cs = Math.round(Math.max(0, t) * 100);
+  const h = Math.floor(cs / 360000); cs -= h * 360000;
+  const m = Math.floor(cs / 6000);   cs -= m * 6000;
+  const s = Math.floor(cs / 100);    cs -= s * 100;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
+}
+
+function buildKaraokeText(syls, onsets, lineEnd) {
+  const bounds = onsets.concat([lineEnd]);
+  const offs = bounds.map(b => Math.round((b - bounds[0]) * 100));
+  let out = "";
+  for (let i = 0; i < syls.length; i++) {
+    out += `{\\kf${Math.max(1, offs[i + 1] - offs[i])}}${syls[i].text}`;
+  }
+  return out.replace(/\s+$/, "");
+}
+
+// A line is retimed once every unit (syllable, or word in word mode) has a
+// tap. The end is NOT taken from the key release; see tappedEnd.
+// Word mode (S): the syllable split is wrong ("y|ou", "re|al|ly"), so the
+// line is tapped once per WORD and syllables inside a word are spread
+// evenly. Without it the only way past such a line is N, which leaves a
+// placeholder line untimed. SYLFIX still goes out, so the split gets fixed in
+// Aegisub; the timing does not wait on it.
+function needed(e) { return e.wordMode ? e.wstarts.length : e.syls.length; }
+function tapSyl(e, i) { return e.wordMode ? e.wstarts[i] : i; }
+function isTapped(e) { return !!(e.taps && e.taps.length >= needed(e)); }
+// One tap per unit; an extra tap after the last one marks where the final note
+// ENDS (the optional "end tap").
+function unitTaps(e) { return e.taps ? e.taps.slice(0, needed(e)) : []; }
+function endTapOf(e) { const n = needed(e); return e.taps && e.taps.length > n ? e.taps[n] : null; }
+
+function median(xs) {
+  if (!xs.length) return NaN;
+  const a = xs.slice().sort((x, y) => x - y);
+  const n = a.length;
+  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
+}
+function medianAbs(xs) { return median(xs.map(Math.abs)); }
+
+// The tapper's constant lead or lag, measured against the script on the lines
+// the script already has right. Those lines have ~50ms median error, so the
+// median tap-minus-script over them IS the tapper's bias. Two passes: a wide
+// window to find the centre, then a tight one around it, so a large bias is
+// not truncated by the window. Returns cal = 0 until CAL_MIN_N samples exist.
+function calibration(events) {
+  const d = [];
+  for (const e of events) {
+    if (!e.taps || e.untrusted) continue;
+    unitTaps(e).forEach((t, i) => d.push(t - e.ghost[tapSyl(e, i)]));
+  }
+  const wide = d.filter(x => Math.abs(x) < 0.4);
+  if (wide.length < CAL_MIN_N) return { cal: 0, n: wide.length, ready: false };
+  const c0 = median(wide);
+  const tight = d.filter(x => Math.abs(x - c0) < 0.15);
+  if (tight.length < CAL_MIN_N) return { cal: 0, n: tight.length, ready: false };
+  return { cal: median(tight), n: tight.length, ready: true };
+}
+
+// Tap times with the bias removed: what gets written out. In word mode the
+// syllables of a word are spread evenly up to the next word's tap (0.2s per
+// syllable for the last word).
+function onsetsOf(e, cal) {
+  const t = unitTaps(e).map(x => x - cal);
+  if (!e.wordMode) return t;
+  const on = [];
+  e.wstarts.forEach((k0, w) => {
+    const k1 = w + 1 < e.wstarts.length ? e.wstarts[w + 1] : e.syls.length;
+    const n = k1 - k0, a = t[w];
+    const b = w + 1 < t.length ? t[w + 1] : a + 0.2 * n;
+    for (let j = 0; j < n; j++) on.push(a + (b - a) * j / n);
+  });
+  return on;
+}
+
+// Where the next line of the same style really starts, if anything knows.
+function nextStart(events, e, cal) {
+  for (let j = e.i + 1; j < events.length; j++) {
+    const x = events[j];
+    if (x.style !== e.style) continue;
+    if (isTapped(x)) return x.taps[0] - cal;
+    if (!x.untrusted) return x.start_s;
+  }
+  return null;
+}
+
+// End of a retimed line: the end tap if there is one, else the last onset
+// plus `hold`. Either way it stops 20ms short of the next line of the same
+// style, but never less than 0.1s after the last onset.
+//
+// Why not something simpler, since each of these was tried on real tracks:
+//   the key release cuts nearly every line short; nobody holds a key through
+//     a sung vowel.
+//   the script's last-syllable length is right on dense rap (last syllables
+//     ~0.27s) and far too short on held notes (~1s, up to 1.9s).
+//   no rule from the line's own tap pace fits both. Whether a note is held is
+//     in the audio, not the rhythm. Hence a per-track default plus an
+//     explicit end tap.
+function tappedEnd(events, e, cal, hold) {
+  const on = onsetsOf(e, cal);
+  const last = on[on.length - 1];
+  const et = endTapOf(e);
+  const h = Math.max(LAST_SYL_MIN, hold == null || isNaN(hold) ? LAST_SYL_DEFAULT : hold);
+  let end = (et != null && et >= last + END_TAP_MIN) ? et : last + h;   // et is raw: see tap()
+  const nx = nextStart(events, e, cal);
+  if (nx != null && nx - 0.02 < end) end = Math.max(nx - 0.02, last + 0.10);
+  return end;
+}
+
+// Effect carries SYLFIX alongside whatever was already there. LOWCONF means
+// "the script guessed this line's timing", which stops being true once the
+// line is tapped, so a retimed line drops it.
+function effectOf(e) {
+  const parts = [];
+  let base = (e.effect || "").trim();
+  if (isTapped(e)) base = base.replace(/\bLOWCONF\b/g, "").replace(/\s+/g, " ").trim();
+  if (base) parts.push(base);
+  if (e.sylFlag) parts.push("SYLFIX");
+  return parts.join(" ");
+}
+
+function eventToLine(events, e, cal, hold) {
+  if (!isTapped(e)) {
+    return `${e.kind}: ${[e.layer, e.start, e.end, e.style, e.actor, e.mL, e.mR, e.mV, effectOf(e), e.text].join(",")}`;
+  }
+  const on = onsetsOf(e, cal);
+  const end = tappedEnd(events, e, cal, hold);
+  const text = buildKaraokeText(e.syls, on, end);
+  return `${e.kind}: ${[e.layer, secondsToAss(on[0]), secondsToAss(end),
+                        e.style, e.actor, e.mL, e.mR, e.mV, effectOf(e), text].join(",")}`;
+}
+
+// Which line the pointer should sit on at time t, when nothing is pinned.
+//
+// The rule is "hold until the current line is over", NOT "whichever line is
+// closest to now", because lines in a dense file overlap.
+// A line whose timing is fiction is never skipped automatically: its stored
+// end is not an audio position, so "t is past its end" means nothing.
+function pickLine(events, t, idx, pinned) {
+  const over = e => {
+    if (isTapped(e)) return t > e.taps[e.taps.length - 1] + 0.3;
+    if (e.untrusted) return false;
+    return t > e.end_s + 0.15;
+  };
+  if (pinned != null && events[pinned] && !over(events[pinned])) return pinned;
+  let want = idx;
+  while (want < events.length - 1 && over(events[want])) want++;
+  return want;
+}
+
+function buildAss(doc, cal, hold) {
+  return doc.head.concat(doc.events.map(e => eventToLine(doc.events, e, cal || 0, hold))).join("\r\n") + "\r\n";
+}
+
+// ---8<--- CORE END
+
+// ── state ────────────────────────────────────────────────────────────────────
+// Shown in the header. Check it before reporting a bug: it says which copy
+// of the tool is running.
+const BUILD = "2026-10-28";
+const REWIND_LEAD = 1.2;   // seconds of pre-roll when rewinding to a line
+let doc = null, idx = 0, audioReady = false, trackName = "track", follow = true, debug = false;
+const audio = document.getElementById("audio");
+const $ = id => document.getElementById(id);
+
+let anchorPerf = 0, anchorTime = 0;
+function reanchor() { anchorPerf = performance.now(); anchorTime = audio.currentTime; }
+audio.addEventListener("timeupdate", reanchor);
+audio.addEventListener("play", reanchor);
+audio.addEventListener("seeked", reanchor);
+
+// Two clocks, deliberately.
+//   audio.currentTime: authoritative, coarse (~4 updates/sec). Everything the
+//     UI decides (which line, which syllable is highlighted) uses this, so the
+//     display can never disagree with the audio.
+//   now_s(): currentTime extrapolated with performance.now() between updates.
+//     Used ONLY for tap timestamps, where the 250ms granularity would dominate
+//     the measurement. A bad extrapolation can cost precision on one tap; it
+//     can never move the pointer.
+function now_s() {
+  if (audio.paused) return audio.currentTime;
+  const t = anchorTime + ((performance.now() - anchorPerf) / 1000) * audio.playbackRate;
+  // never trust extrapolation that has run away from the audio
+  return Math.abs(t - audio.currentTime) > 0.5 ? audio.currentTime : t;
+}
+// The offset box is in real milliseconds. At 0.75x a real delay covers only
+// 0.75x as much song, so it is scaled by the playback rate; unscaled, it
+// would over-correct at any speed but 1x.
+function tapTime() {
+  return Math.max(0, now_s() - (parseFloat($("offset").value) || 0) / 1000 * audio.playbackRate);
+}
+function hold_s() { const h = parseFloat($("hold").value); return isNaN(h) ? LAST_SYL_DEFAULT : h; }
+function thresh_s() { return (parseFloat($("thresh").value) || 80) / 1000; }
+function curCal() {
+  if (!doc || !$("autoCal").checked) return { cal: 0, n: 0, ready: false, off: true };
+  return calibration(doc.events);
+}
+
+// ── loading ──────────────────────────────────────────────────────────────────
+$("fAss").addEventListener("change", ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  trackName = f.name.replace(/_subs-tap\.ass$/i, "").replace(/_subs\.ass$/i, "").replace(/\.ass$/i, "");
+  const r = new FileReader();
+  r.onload = () => {
+    doc = parseAss(r.result); idx = 0; $("bExport").disabled = false;
+    sidebarSig = ""; buildTicks(); render();
+  };
+  r.readAsText(f);
+});
+$("autoCal").addEventListener("change", () => { sidebarSig = ""; render(); });
+
+// One tick per line on the scrub bar: grey = untouched, coral = where you are,
+// lime = retimed. Lines with fictional timing get no tick: they would all
+// pile up on one fake timestamp.
+function buildTicks() {
+  if (!doc || !isFinite(audio.duration) || audio.duration <= 0) return;
+  $("ticks").innerHTML = doc.events.filter(e => !e.untrusted).map(e =>
+    `<i data-i="${e.i}" class="${e.style === "BG" ? "bg" : ""}" style="left:${(100 * e.start_s / audio.duration).toFixed(3)}%"></i>`
+  ).join("");
+}
+
+function paintTicks() {
+  if (!doc) return;
+  for (const t of document.querySelectorAll("#ticks i")) {
+    const i = +t.dataset.i;
+    t.classList.toggle("done", isTapped(doc.events[i]));
+    t.classList.toggle("cur", i === idx);
+  }
+}
+
+// Seeking by pointer. Dragging scrubs; the pin is cleared so the pointer
+// follows wherever you land.
+let scrubbing = false;
+function scrubTo(ev) {
+  if (!isFinite(audio.duration)) return;
+  const r = $("scrub").getBoundingClientRect();
+  const x = Math.min(Math.max(ev.clientX - r.left, 0), r.width);
+  audio.currentTime = (x / r.width) * audio.duration;
+  pinned = null;
+  reanchor();
+}
+$("scrub").addEventListener("pointerdown", ev => {
+  scrubbing = true; $("scrub").setPointerCapture(ev.pointerId); scrubTo(ev);
+});
+$("scrub").addEventListener("pointermove", ev => { if (scrubbing) scrubTo(ev); });
+$("scrub").addEventListener("pointerup", ev => {
+  scrubbing = false; $("scrub").releasePointerCapture(ev.pointerId);
+});
+
+$("fWav").addEventListener("change", ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  audio.src = URL.createObjectURL(f);
+  audio.preservesPitch = true; audio.mozPreservesPitch = true;
+  audioReady = true;
+  audio.addEventListener("loadedmetadata", () => { buildTicks(); render(); }, { once: true });
+  render();
+});
+
+// ── tapping ──────────────────────────────────────────────────────────────────
+function cur() { return doc && doc.events[idx]; }
+
+function tap() {
+  const e = cur(); if (!e) return;
+  pin();
+  if (!e.taps) e.taps = [];
+  if (e.taps.length >= needed(e) + 1) return;      // +1: the optional end tap
+  // The end tap is stored RAW, with no offset. Onset taps are partly
+  // reactions and lag (by about 330ms on a slow track at 1x); note ends are
+  // anticipated and land on time. One offset for both would pull every end
+  // tap early. Auto-offset is likewise applied to onsets only.
+  const isEnd = e.taps.length === needed(e);
+  e.taps.push(isEnd ? now_s() : tapTime());
+  refusal = "";
+  render();
+}
+
+function undo() {
+  const e = cur(); if (!e || !e.taps) return;
+  e.taps.pop();
+  if (!e.taps.length) e.taps = null;
+  render();
+}
+
+// Real audio positions only: null when the line has no trustworthy timing.
+// Raw tap times are used here: this is about where to put the playhead, and
+// the playhead is where the tapper heard it.
+function realStart(e) {
+  if (e.taps && e.taps.length) return e.taps[0];
+  return e.untrusted ? null : e.start_s;
+}
+function realEnd(e) {
+  if (e.taps && e.taps.length) return e.taps[e.taps.length - 1];
+  return e.untrusted ? null : e.end_s;
+}
+
+// The last position in the track we actually know about, before event i.
+// Walks back past lines with fictional timing to the last real one, so a seek
+// inside a collapsed block lands where you were working rather than at the
+// block's fabricated timestamp. 0 only if nothing before it is real.
+function anchorBefore(i) {
+  for (let j = i - 1; j >= 0; j--) {
+    const r = realEnd(doc.events[j]);
+    if (r != null) return r;
+  }
+  return 0;
+}
+
+function redoLine() {
+  const e = cur(); if (!e) return;
+  const from = realStart(e);
+  e.taps = null;
+  pin();
+  audio.currentTime = Math.max(0, (from != null ? from : anchorBefore(idx)) - 2);
+  reanchor(); render();
+}
+
+// Jump to a line and put the playhead just before it. Never seeks to a
+// fictional timestamp. O, P and sidebar clicks all come through here.
+function goTo(i, lead) {
+  idx = Math.max(0, Math.min(doc.events.length - 1, i));
+  pinned = idx;
+  const e = doc.events[idx];
+  const from = realStart(e);
+  const target = from != null ? from : anchorBefore(idx);
+  audio.currentTime = Math.max(0, target - (lead == null ? 1.5 : lead));
+  reanchor(); render();
+}
+
+// Moving on is not just "next line": tapping a line takes real time, and the
+// song keeps playing while you do it, so the next line may already have gone
+// by: rewind to just before it. But if the next line's stored time is
+// fiction (or earlier than the line just done), rewinding to it would throw
+// you somewhere else in the song, so carry on from where the last line
+// actually ended instead.
+function staleAfter(done, next) {
+  if (next.untrusted) return true;
+  const ds = realStart(done);
+  return ds != null && next.start_s < ds + 0.5;
+}
+
+function advance() {
+  refusal = "";
+  if (!doc || idx >= doc.events.length - 1) { pinned = null; render(); return; }
+  const done = doc.events[idx];
+  const next = doc.events[idx + 1];
+
+  if (staleAfter(done, next)) {
+    idx++;
+    pinned = idx;
+    const from = realEnd(done);
+    audio.currentTime = Math.max(0, (from != null ? from : anchorBefore(idx)) - 0.3);
+    reanchor(); render();
+  } else if (audio.currentTime > next.start_s - 0.3) {
+    goTo(idx + 1, REWIND_LEAD);          // seeks, pins, renders
+  } else {
+    idx++;
+    pinned = null;                        // still ahead of it: just follow along
+    render();
+  }
+}
+
+// A part-tapped line is never dropped silently. Enter or N on it is refused:
+// moving on would throw the taps away and keep the script's timing, which on
+// a coral line means exporting a placeholder.
+function partial(e) { return !!(e.taps && e.taps.length && e.taps.length < needed(e)); }
+let refusal = "";
+function refuse(e) {
+  refusal = `tapped ${e.taps.length} of ${needed(e)} ${e.wordMode ? "words" : "syllables"} — finish the line, ` +
+            `<kbd>backspace</kbd> to fix, or <kbd>R</kbd> to redo`;
+  render();
+}
+
+// Enter keeps your taps, always. With auto-offset a tapped line is as good as
+// the script even where the script was right, so there is no case for
+// preferring the script's timing over taps.
+function accept() {
+  const e = cur(); if (!e) return;
+  if (partial(e)) { refuse(e); return; }
+  advance();
+}
+
+// S: the syllable split is wrong. Flags SYLFIX for Aegisub AND switches the
+// line to word mode, staying on it so it can be tapped once per word. S again
+// undoes both. It does not move on, since moving on would keep the script's
+// timing, which on a placeholder line is no timing at all.
+// On a line already fully tapped (not in word mode), S only toggles SYLFIX and
+// keeps the taps: an UNDER-split line ("create" as one syllable) times
+// correctly as tapped, only the split needs fixing in Aegisub, and word mode
+// would throw away the syllable taps on every other word in the line.
+function flagSyllables() {
+  const e = cur(); if (!e) return;
+  refusal = ""; sidebarSig = "";
+  if (isTapped(e) && !e.wordMode) { e.sylFlag = !e.sylFlag; render(); return; }
+  e.taps = null;
+  if (e.wordMode) { e.wordMode = false; e.sylFlag = false; }
+  else { e.wordMode = true; e.sylFlag = true; }
+  render();
+}
+
+// N keeps what the file had, discarding any taps. On a line whose timing was
+// a placeholder there is nothing to keep, so a fully tapped one keeps its
+// taps instead; otherwise N after tapping a coral line would export the
+// placeholder.
+function keepExisting() {
+  const e = cur(); if (!e) return;
+  if (partial(e)) { refuse(e); return; }
+  if (!(e.untrusted && isTapped(e))) e.taps = null;
+  advance();
+}
+
+// ── follow mode ──────────────────────────────────────────────────────────────
+// The pointer tracks the audio, but only ever leaves a line once that line is
+// over (see pickLine). Anything you do to a line pins it.
+let pinned = null;
+function pin() { pinned = idx; }
+
+function tick() {
+  requestAnimationFrame(tick);
+  if (!doc) return;
+  $("clock").textContent =
+    `${fmt(audio.currentTime)} / ${fmt(audio.duration)}  ${audio.playbackRate.toFixed(2)}x` +
+    (audio.paused ? "  paused" : "") + (follow ? (pinned != null ? "  pinned" : "  follow") : "  manual");
+
+  if (follow && !audio.paused && pinned == null) {
+    const want = pickLine(doc.events, audio.currentTime, idx, null);
+    if (want !== idx) { idx = want; render(); }
+  }
+  paintGhost(audio.currentTime);
+
+  if (isFinite(audio.duration) && audio.duration > 0) {
+    const pct = (100 * audio.currentTime / audio.duration).toFixed(3) + "%";
+    $("played").style.width = pct;
+    $("head").style.left = pct;
+  }
+
+  if (debug && performance.now() - lastDebug > 250) {
+    lastDebug = performance.now();
+    const e = cur();
+    $("verdict").textContent =
+      `t=${audio.currentTime.toFixed(2)} extrap=${now_s().toFixed(2)} idx=${idx} ` +
+      `pinned=${pinned} line=[${e ? e.start_s.toFixed(2) : "-"}..${e ? e.end_s.toFixed(2) : "-"}]` +
+      `${e && e.untrusted ? " UNTRUSTED" : ""} ` +
+      `taps=${e && e.taps ? e.taps.length : 0}/${e ? e.syls.length : 0} rate=${audio.playbackRate}`;
+  }
+}
+
+// Highlights the syllable the EXISTING timing says is being sung right now,
+// as a guide while tapping. Nothing to show for a line whose timing is
+// fiction.
+function paintGhost(t) {
+  const e = cur(); if (!e) return;
+  const spans = document.querySelectorAll("#active .syl");
+  if (!spans.length) return;
+  let g = -1;
+  if (!e.untrusted && t >= e.start_s && t <= e.end_s + 0.2) {
+    for (let i = 0; i < e.ghost.length; i++) if (e.ghost[i] <= t) g = i;
+  }
+  spans.forEach((s, i) => s.classList.toggle("ghost", i === g && !s.classList.contains("hit")));
+}
+
+// ── keys ─────────────────────────────────────────────────────────────────────
+const held = {};
+document.addEventListener("keydown", ev => {
+  if (ev.target.tagName === "INPUT") return;
+  const k = ev.key.toLowerCase();
+  if (k === "j" || k === "k") {
+    ev.preventDefault();
+    if (ev.repeat || held[k]) return;
+    held[k] = true; tap(); return;
+  }
+  if (ev.code === "Space") { ev.preventDefault(); audio.paused ? audio.play() : audio.pause(); return; }
+  if (k === "enter")     { ev.preventDefault(); accept(); return; }
+  if (k === "n")         { ev.preventDefault(); keepExisting(); return; }
+  if (k === "s")         { ev.preventDefault(); flagSyllables(); return; }
+  if (k === "backspace") { ev.preventDefault(); undo(); return; }
+  if (k === "r")         { ev.preventDefault(); redoLine(); return; }
+  if (k === "f")         { ev.preventDefault(); follow = !follow; render(); return; }
+  if (k === "d")         { ev.preventDefault(); debug = !debug; return; }
+  if (k === "escape")    { ev.preventDefault(); pinned = null; render(); return; }
+  if (k === "p")         { ev.preventDefault(); goTo(idx - 1); return; }
+  if (k === "o")         { ev.preventDefault(); goTo(idx); return; }
+  if (k === "[" || k === "-" || k === "_") {
+    audio.currentTime = Math.max(0, audio.currentTime - 5); reanchor(); return;
+  }
+  if (k === "]" || k === "=" || k === "+") { audio.currentTime += 5; reanchor(); return; }
+  if (k === "1" || k === "2" || k === "3") {
+    audio.playbackRate = { "1": 0.5, "2": 0.75, "3": 1.0 }[k];
+    audio.preservesPitch = true; reanchor();
+  }
+});
+document.addEventListener("keyup", ev => {
+  const k = ev.key.toLowerCase();
+  if (k === "j" || k === "k") held[k] = false;
+});
+
+// ── export ───────────────────────────────────────────────────────────────────
+$("bExport").addEventListener("click", () => {
+  if (!doc) return;
+  const blob = new Blob(["﻿" + buildAss(doc, curCal().cal, hold_s())], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${trackName}_subs-tap.ass`;
+  a.click(); URL.revokeObjectURL(a.href);
+});
+
+// ── render ───────────────────────────────────────────────────────────────────
+function fmt(t) {
+  if (!isFinite(t)) return "--:--";
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+function plain(e) { return e.syls.map(s => s.text).join("").trim(); }
+function escapeHtml(s) { return s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+function shownTime(x, cal) {
+  if (isTapped(x)) return fmt(x.taps[0] - cal);
+  return x.untrusted ? "--:--" : fmt(x.start_s);
+}
+// Per-tap difference between a tap (bias removed) and the script.
+function deltas(e, cal) {
+  if (!e.taps) return [];
+  return unitTaps(e).map((t, i) => t - cal - e.ghost[tapSyl(e, i)]);
+}
+
+function flagNote(e) {
+  if (e.wordMode) return ` <span class="bad">· word mode, SYLFIX</span>`;
+  return e.sylFlag ? ` <span class="bad">· SYLFIX flagged (<kbd>S</kbd> unflags)</span>`
+                   : ` · <kbd>S</kbd> flags the split for Aegisub`;
+}
+function endNote(e) {
+  return endTapOf(e) != null ? "· end tapped" : `· optional: one more tap where the note ends (else ${hold_s()}s)`;
+}
+
+function render() {
+  if (!doc) { $("meta").textContent = "no file loaded"; return; }
+  const C = curCal();
+  $("cal").textContent = C.off ? "" : C.ready
+    ? `${C.cal >= 0 ? "+" : ""}${(C.cal * 1000).toFixed(0)}ms (n=${C.n})`
+    : `measuring… ${C.n}/${CAL_MIN_N}`;
+
+  const e = cur();
+  const tapped = doc.events.filter(isTapped).length;
+  const flagged = doc.events.filter(x => x.sylFlag).length;
+  const fiction = doc.events.filter(x => x.untrusted && !isTapped(x)).length;
+  $("meta").innerHTML = escapeHtml(
+    `${trackName} · line ${idx + 1}/${doc.events.length} · ${tapped} retimed · ` +
+    `${doc.events.length - tapped} keeping script timing` +
+    (flagged ? ` · ${flagged} flagged SYLFIX` : "") +
+    (audioReady ? "" : " · NO AUDIO LOADED")) +
+    (fiction ? ` · <span class="bad">${fiction} still have placeholder timing</span>` : "");
+
+  if (e) {
+    const n = Math.min(e.taps ? e.taps.length : 0, needed(e));
+    const unit = i => e.wordMode ? e.wordOf[i] : i;
+    $("active").innerHTML = e.syls.map((s, i) =>
+      `<span class="syl ${unit(i) < n ? "hit" : ""} ${unit(i) === n ? "next" : ""}">${escapeHtml(s.text)}</span>`
+    ).join("");
+
+    const d = e.untrusted ? [] : deltas(e, C.cal);
+    $("deltas").innerHTML = d.length
+      ? d.map(x => `<span class="${Math.abs(x) <= thresh_s() ? "ok" : "bad"}">${(x * 1000 >= 0 ? "+" : "")}${(x * 1000).toFixed(0)}</span>`).join(" ")
+      : "";
+
+    if (refusal) {
+      $("verdict").innerHTML = `<span class="bad">${refusal}</span>`;
+    } else if (isTapped(e) && !e.untrusted) {
+      const md = medianAbs(d) * 1000;
+      $("verdict").innerHTML = `<span class="ok">tapped — ${md.toFixed(0)}ms from the script. <kbd>enter</kbd> keeps your taps. ${endNote(e)}</span>${flagNote(e)}`;
+    } else if (isTapped(e)) {
+      $("verdict").innerHTML = `<span class="ok">tapped — <kbd>enter</kbd> keeps your taps (this line had placeholder timing). ${endNote(e)}</span>${flagNote(e)}`;
+    } else if (e.wordMode) {
+      $("verdict").innerHTML = `<span class="bad">WORD MODE — tap once per word (${needed(e)} taps). Flagged SYLFIX for Aegisub. <kbd>S</kbd> again undoes.</span>`;
+    } else if (e.sylFlag) {
+      $("verdict").innerHTML = `<span class="bad">SYLFIX — marked for hand work in Aegisub. <kbd>S</kbd> to tap it by word.</span>`;
+    } else if (e.untrusted) {
+      $("verdict").innerHTML = `<span class="bad">no real timing for this line — tap it; <kbd>N</kbd> leaves a placeholder.</span>`;
+    } else if (e.effect && e.effect.trim()) {
+      $("verdict").innerHTML = `<span class="bad">LOWCONF — the script guessed this line's timing.</span>`;
+    } else {
+      $("verdict").textContent = "";
+    }
+
+    $("upcoming").innerHTML = doc.events.slice(idx + 1, idx + 3).map(x =>
+      `<div><span class="due">${shownTime(x, C.cal)}</span> ${escapeHtml(plain(x))}</div>`).join("");
+  }
+
+  const sig = doc.events.map(x => (isTapped(x) ? "1" : "0") + (x.sylFlag ? "S" : "")).join("") +
+              "|" + doc.events.length + "|" + C.cal.toFixed(3);
+  if (sig !== sidebarSig) {
+    sidebarSig = sig;
+    buildSidebar(C.cal);
+  }
+  for (const el of document.querySelectorAll(".row")) {
+    el.classList.toggle("cur", +el.dataset.i === idx);
+  }
+  const c2 = document.querySelector(".row.cur");
+  if (c2 && lastScrolled !== idx) { lastScrolled = idx; c2.scrollIntoView({ block: "nearest" }); }
+  paintTicks();
+}
+
+let sidebarSig = "", lastScrolled = -1, lastDebug = 0;
+
+function buildSidebar(cal) {
+  $("sidebar").innerHTML = doc.events.map((x, i) => {
+    const done = isTapped(x);
+    const md = done && !x.untrusted ? medianAbs(deltas(x, cal)) * 1000 : NaN;
+    const cls = isNaN(md) ? "" : (md <= thresh_s() * 1000 ? "small" : "big");
+    const stale = x.untrusted && !done;
+    return `<div class="row ${i === idx ? "cur" : ""} ${done ? "done" : ""} ${cls} ${x.style === "BG" ? "bg" : ""} ${x.effect && x.effect.trim() ? "low" : ""} ${stale ? "stale" : ""} ${x.sylFlag ? "sylfix" : ""}" data-i="${i}">
+      <span class="s">${x.sylFlag ? "✎" : (done ? "●" : "·")}</span>
+      <span class="t">${shownTime(x, cal)}</span>
+      <span class="d">${isNaN(md) ? "" : md.toFixed(0) + "ms"}</span>
+      <span class="x">${escapeHtml(plain(x))}</span></div>`;
+  }).join("");
+  for (const el of document.querySelectorAll(".row")) {
+    el.addEventListener("click", () => goTo(+el.dataset.i));
+  }
+}
+
+$("build").textContent = "build " + BUILD;
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

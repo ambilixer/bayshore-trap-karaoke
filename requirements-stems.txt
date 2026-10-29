@@ -1,0 +1,24 @@
+# Stems virtual environment: step 1 (run_stems.py). Python 3.11.
+#
+# Install PyTorch FIRST, from PyTorch's own index, so you get the CUDA build:
+#
+#   python -m pip install torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+#
+# then this file:
+#
+#   python -m pip install -r requirements-stems.txt
+#
+# Installed the other way round, pip pulls a CPU-only torch from PyPI and the
+# Roformer pass takes over 20 minutes instead of under 3. Afterwards, check:
+#
+#   python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+#
+# which should print 2.11.0+cu128 True.
+#
+# Versions are the ones the pipeline is run with.
+
+audio-separator[gpu]==0.44.1
+demucs==4.0.1
+numpy==2.4.4
+scipy==1.17.1
+soundfile==0.13.1

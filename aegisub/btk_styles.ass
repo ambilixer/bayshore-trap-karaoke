@@ -1,0 +1,22 @@
+﻿[Script Info]
+; Created by Andy Charlie W. (ambilixer) in collaboration with Claude (Anthropic).
+;
+; btk_styles.ass: the Main and BG lyric styles, and nothing else. Import them
+; into a track's _subs-timed.ass with Aegisub's Style Manager (see HOWTO.md)
+; before running the Karaoke Formatting v2 macro. check_styles.py compares a
+; finished track's styles against these values.
+Title: bayshore-trap-karaoke lyric styles
+ScriptType: v4.00+
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Main,Consolas,80,&H0040DEB9,&H00767A6E,&H00000000,&HAA000000,-1,0,0,0,90,100,1,0,1,0,2.5,5,40,40,0,1
+Style: BG,Consolas,80,&H00646EF7,&H00595C69,&H00000000,&HAA000000,-1,0,0,0,90,100,1,0,1,0,2.5,2,40,40,260,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

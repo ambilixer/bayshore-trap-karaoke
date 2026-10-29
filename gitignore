@@ -1,0 +1,61 @@
+# bayshore-trap-karaoke .gitignore
+#
+# What stays out of the public repository, and why. With no config.toml,
+# paths.py puts tracks/ and track_db.json inside this folder, so the first
+# two blocks matter for anyone running the pipeline, not only for us.
+
+# Your settings: local paths and interpreters
+config.toml
+
+# Track data: lyrics, timing and audio are other people's work
+tracks/
+track_db.json
+
+# Safety net: track files that end up somewhere other than tracks/
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.mp4
+*.mkv
+*.webm
+*.ass
+*_whisp.json
+*_meta.json
+*_yt.json
+*_lyr.txt
+*_yt_copy.txt
+*_thumb.png
+*_bgimg.png
+
+# The one .ass that ships: the lyric styles template, no lyrics in it
+!aegisub/btk_styles.ass
+
+# Local-only tools and notes
+sync_check.py
+manifest.json
+manifest_prev.json
+scripts/utils/
+btk_karaoke_config.lua
+tools/lyrics_*.txt
+design/
+
+# Dated archive folders
+old/
+versions/
+sub_versions/
+subs_versions/
+diagnostics/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editors and OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store

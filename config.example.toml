@@ -1,0 +1,38 @@
+# bayshore-trap-karaoke settings
+#
+# Copy this file to config.toml in the same folder and edit it there.
+# config.toml is ignored by git, so your paths stay out of the repository.
+#
+# Every setting is optional: delete the leading # to use one. Anything left
+# commented out uses the default described above it.
+#
+# Windows paths: use single quotes, or forward slashes. In double quotes a
+# backslash starts an escape sequence and the file will not load.
+#   good:  'C:\venvs\stems\Scripts\python.exe'
+#   good:  "C:/venvs/stems/Scripts/python.exe"
+#   bad:   "C:\venvs\stems\Scripts\python.exe"
+#
+# Relative paths are taken from this folder.
+ 
+[paths]
+# The folder holding one subfolder per track.
+# Default: tracks/ in this folder.
+# tracks_dir = 'D:\karaoke\tracks'
+ 
+# The pipeline progress database.
+# Default: track_db.json beside the tracks folder.
+# db_path = 'D:\karaoke\track_db.json'
+ 
+[python]
+# The interpreter in each virtual environment. run_pipeline.py starts steps 1
+# to 3 with these. Default: the interpreter running run_pipeline.py, which
+# only works if every package is installed in one environment.
+# stems   = 'C:\venvs\stems\Scripts\python.exe'
+# karaoke = 'C:\venvs\karaoke\Scripts\python.exe'
+ 
+[models]
+# Where audio-separator keeps its model files. The Roformer model downloads
+# here on first use and is several hundred MB, so pick a local disk rather
+# than a synced folder.
+# Default: .cache\audio-separator in your user folder.
+# model_dir = 'D:\models\audio-separator'

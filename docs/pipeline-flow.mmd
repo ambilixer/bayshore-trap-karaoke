@@ -1,0 +1,47 @@
+%%{init: {"theme": "base", "fontFamily": "Consolas, DejaVu Sans Mono, monospace", "flowchart": {"htmlLabels": true, "wrappingWidth": 560, "nodeSpacing": 28, "rankSpacing": 38, "padding": 14}, "themeVariables": {"fontFamily": "Consolas, DejaVu Sans Mono, monospace", "fontSize": "15px", "background": "#090406", "primaryColor": "#12090c", "primaryTextColor": "#d8ddda", "primaryBorderColor": "#241a1e", "lineColor": "#6e7a76", "textColor": "#d8ddda", "edgeLabelBackground": "#090406"}, "themeCSS": "* { font-family: Consolas, DejaVu Sans Mono, monospace !important; } .edgeLabel, .edgeLabel p, .edgeLabel span, .labelBkg { background-color: #090406 !important; color: #6e7a76 !important; } .edgeLabel rect { fill: #090406 !important; } .flowchart-link { stroke: #6e7a76 !important; stroke-width: 1.5px !important; } marker path, .marker { fill: #6e7a76 !important; stroke: #6e7a76 !important; } .cluster rect { fill: #12090c !important; stroke: #241a1e !important; } .cluster-label, .cluster-label span, .cluster-label p { color: #6e7a76 !important; fill: #6e7a76 !important; letter-spacing: 3px; }"}}%%
+flowchart TD
+    %% Created by Andy Charlie W. (ambilixer) in collaboration with Claude (Anthropic).
+    %% The pipeline at a glance, shown in README.md and HOWTO.md as
+    %% docs/images/pipeline-flow.svg. After editing this file, re-render it with
+    %% the Mermaid CLI (npm package @mermaid-js/mermaid-cli), from the repo root:
+    %%   mmdc -i docs/pipeline-flow.mmd -o docs/images/pipeline-flow.svg -b "#090406"
+    %% Colours and font follow btk_tap.html.
+    subgraph KEY ["Key"]
+        direction TB
+        K1["You Do This"]:::manual
+        K2["Runs by Itself"]:::auto
+        K3{{"Check"}}:::gate
+        NOTE["The pipeline waits at each manual step as long as you need.<br/>Or quit and resume later: --from-step 1 after the lyrics,<br/>--from-step 4 after Aegisub."]:::note
+        K1 ~~~ NOTE
+        K2 ~~~ NOTE
+        K3 ~~~ NOTE
+    end
+
+    M0["<b>Start a Track</b><br/>run_pipeline.py with a track ID and a YouTube link<br/>you input the track's details when asked<br/>(artist, title, album, year, genre)"]
+    S0["<b>Step 0 · Set Up the Track</b><br/>creates the folder · downloads the audio<br/>starts _lyr.txt"]
+    M1["<b>Paste the Lyrics into _lyr.txt</b><br/>you input the lyrics, e.g. from Genius<br/>keep [Section] headers · BG lines in (parentheses)<br/>every line within the 48-character ruler"]
+    S13["<b>Steps 1 to 3 · First Draft</b><br/>separate the vocals · align the lyrics to them<br/>write _subs.ass with a timing for every syllable"]
+    M2["<b>Tap Tool</b> (btk_tap.html, in a browser)<br/>tap along with J and K, one tap per syllable<br/>about 10 minutes · export _subs-tap.ass"]
+    G{{"<b>Export Gate</b> · score_timing.py --check"}}
+    M3["<b>Aegisub</b><br/>fix flagged lines · place the END marker<br/>save _subs-timed.ass · apply the styles<br/>run the macro once · save _subs-final.ass"]
+    S47["<b>Steps 4 to 7 · Finish</b><br/>title cards · karaoke video · final splice<br/>YouTube title, description, tags and thumbnail"]
+    M4["<b>Watch It, Then Upload</b><br/>_final.mp4, with _yt_copy.txt and _thumb.png"]
+
+    KEY ~~~ M0
+    M0 --> S0
+    S0 -- "pipeline pauses" --> M1
+    M1 -- "press Enter" --> S13
+    S13 -- "pipeline pauses" --> M2
+    M2 --> G
+    G -- "NOT READY:<br/>fix and re-export" --> M2
+    G -- "READY" --> M3
+    M3 -- "press Enter" --> S47
+    S47 --> M4
+
+    classDef manual fill:#f76e64,stroke:#f76e64,color:#090406
+    classDef auto fill:#b9de40,stroke:#b9de40,color:#090406
+    classDef gate fill:#12090c,stroke:#d8ddda,color:#d8ddda
+    classDef note fill:#090406,stroke:#241a1e,color:#6e7a76
+    class M0,M1,M2,M3,M4 manual
+    class S0,S13,S47 auto
+    class G gate
