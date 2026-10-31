@@ -214,7 +214,7 @@ def main():
         tracks/{track_id}/{track_id}_lyr.txt
 
       - Main vocal lines: plain text, one line per subtitle line
-      - Keep every line within 48 characters: the ruler at the top of the
+      - Keep every line within 44 characters: the ruler at the top of the
         file marks the limit
       - BG/backing vocal lines: wrapped in parentheses (like this)
       - Keep Genius-style section headers: [Verse 1], [Chorus], [Bridge] ...

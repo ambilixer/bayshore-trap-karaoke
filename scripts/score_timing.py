@@ -77,7 +77,7 @@ except ImportError:      # usable outside the pipeline with --files
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 MAX_PAIR_GAP   = 5.0    # seconds; beyond this a "match" is a repeated lyric
-LONG_LINE_WARN = 48     # keep in step with whisperx_to_ass.py
+LONG_LINE_WARN = 44     # keep in step with whisperx_to_ass.py
 KSUM_TOLERANCE = 0.25   # seconds of disagreement between line length and \k sum
 LONG_SYL_WARN  = 8.0    # seconds; a single syllable longer than this is suspect
 PLACEHOLDER_KSUM = 0.2  # seconds; a whole line's \k sum under this is a parked line

@@ -1,0 +1,10 @@
+   [python]
+   stems   = 'C:\venvs\stems\Scripts\python.exe'
+   karaoke = 'C:\venvs\karaoke\Scripts\python.exe'
+
+   [paths]
+   tracks_dir = 'G:\My Drive\projects\auto-karaoke\tracks'
+   db_path    = 'G:\My Drive\projects\auto-karaoke\track_db.json'
+
+   [models]
+   model_dir = 'C:\Users\andre\AppData\Local\Programs\Ultimate Vocal Remover\models\MDX_Net_Models'

@@ -39,7 +39,7 @@
 script_name        = "Karaoke Formatting v2"
 script_description = "Scrolling 7-line stack, sections, breaks, BG"
 script_author      = "Andy Charlie W. (ambilixer)"
-script_version     = "2.13"
+script_version     = "2.14"
 
 include("karaskel.lua")
 
@@ -49,19 +49,20 @@ include("karaskel.lua")
 
 -- ── Frame / layout ──────────────────────────────────────────────────────────
 -- The geometry below assumes the agreed styles: Main and BG both Consolas
--- bold, fontsize 80, ScaleX 90, Spacing 1.
+-- bold, fontsize 92, ScaleX 90, outline 2. Lyric lines are drawn with
+-- LYRIC_FSP letter-spacing (below), not the style's Spacing.
 local X_CENTER      = 960
 -- 3 sung rows above the active row, 3 upcoming below. The block sits close to
 -- the vertical centre; while BG lines are on screen the bottom row fades out
 -- to make room for the separator (BG_HIDE_ROWS).
-local Y_ACTIVE      = 486     -- centre of the active row
-local ROW_PITCH     = 100     -- centre-to-centre distance between lyric rows
+local Y_ACTIVE      = 476     -- centre of the active row
+local ROW_PITCH     = 114     -- centre-to-centre distance between lyric rows
 local LINES_ABOVE   = 3       -- rows visible above the active row
 local LINES_BELOW   = 3       -- rows visible below the active row
 
 -- ── Section headers (from the Actor field of a section's first Main line) ───
-local SECTION_GAP   = 70      -- height of the section item, px
-local SECTION_FS    = 44      -- label fontsize
+local SECTION_GAP   = 80      -- height of the section item, px
+local SECTION_FS    = 51      -- label fontsize
 local SECTION_ALPHA = 0x70    -- label transparency (0 opaque .. 255 invisible)
 local SECTION_ITALIC = true
 local SECTION_UPPER = true
@@ -90,20 +91,20 @@ local MIN_STATE_MS  = 60      -- floor on a state's static window (landing times
 local CUE_GAP_MIN   = 2500    -- ms; gaps at least this long get the dots (and a longer lead)
 local CUE_MS        = 2000    -- ms; dots run for this long before the onset; also the lead in that case
 local DOT_COUNT     = 3
-local DOT_SIZE      = 14      -- px square
-local DOT_GAP       = 14      -- px between dots
-local DOT_MARGIN    = 46      -- px from the last dot to the line's left edge
+local DOT_SIZE      = 16      -- px square
+local DOT_GAP       = 16      -- px between dots
+local DOT_MARGIN    = 53      -- px from the last dot to the line's left edge
 
 -- ── Breaks ──────────────────────────────────────────────────────────────────
 local BREAK_THRESHOLD = 10000 -- ms; a gap at least this long becomes a break item
 local BREAK_HOLD_MS   = 600   -- the finished line holds the active row this long before the break scrolls in
-local BREAK_MARKER_FS = 44    -- upcoming / past marker fontsize
+local BREAK_MARKER_FS = 51    -- upcoming / past marker fontsize
 local BREAK_MARKER_ALPHA = 0x60
-local BREAK_TIMER_FS  = 64    -- countdown fontsize while the break is active
-local BREAK_TIMER_DY  = -11   -- countdown text centre relative to the row centre
-local BAR_WIDTH       = 960
-local BAR_HEIGHT      = 10
-local BAR_DY          = 35    -- bar top relative to the row centre
+local BREAK_TIMER_FS  = 74    -- countdown fontsize while the break is active
+local BREAK_TIMER_DY  = -13   -- countdown text centre relative to the row centre
+local BAR_WIDTH       = 1104
+local BAR_HEIGHT      = 12
+local BAR_DY          = 40    -- bar top relative to the row centre
 local BAR_TRACK_ALPHA = 0x90
 -- The word on a break's marker as it scrolls past ("instrumental · 0:15"),
 -- and the countdown's label when there is no section to name.
@@ -137,8 +138,8 @@ local OUTRO_STACK_FADE_MS = 600   -- the rest of the stack fades out over this, 
 local Y_BG                 = 880
 local BG_LEADIN            = 750    -- ms the line shows, unsung, before its onset
 local BG_MAX_SLOTS         = 2
-local BG_SLOT_SPACING_MULT = 1.3    -- x BG fontsize = stacked row pitch (fs80: 104px)
-local BG_STACK_SHIFT       = 2      -- px each row moves inward; effective pitch = pitch - 2*shift (fs80: 100px)
+local BG_SLOT_SPACING_MULT = 1.29   -- x BG fontsize = stacked row pitch (fs92: 118px)
+local BG_STACK_SHIFT       = 2      -- px each row moves inward; effective pitch = pitch - 2*shift (fs92: 114px, = ROW_PITCH)
 local BG_CUE_ENABLE        = true   -- entry-cue dots on BG lines, same gap rule as Main (CUE_GAP_MIN)
 
 -- ── BG separator ────────────────────────────────────────────────────────────
@@ -148,13 +149,13 @@ local BG_CUE_ENABLE        = true   -- entry-cue dots on BG lines, same gap rule
 -- SEP_MERGE_MS are joined, so the rule doesn't blink off and on between quick
 -- BG lines.
 local SEP_ENABLE      = true
-local SEP_Y           = 804     -- centre of the rule and label
-local SEP_WIDTH       = 960     -- full rule width, label gap included
-local SEP_HEIGHT      = 5       -- px; half of BAR_HEIGHT
+local SEP_Y           = 798     -- centre of the rule and label
+local SEP_WIDTH       = 1104    -- full rule width, label gap included
+local SEP_HEIGHT      = 6       -- px; half of BAR_HEIGHT
 local SEP_LABEL       = "BACKGROUND VOCALS"
-local SEP_FS          = 28
-local SEP_FSP         = 6       -- letter-spacing on the label
-local SEP_LABEL_PAD   = 20      -- px of clear space either side of the label
+local SEP_FS          = 32      -- drawn without the style's outline
+local SEP_FSP         = 7       -- letter-spacing on the label
+local SEP_LABEL_PAD   = 23      -- px of clear space either side of the label
 local SEP_LINE_ALPHA  = 0x80
 local SEP_LABEL_ALPHA = 0x50
 local SEP_FADE_MS     = 250
@@ -169,7 +170,7 @@ local SEP_LEAD_MS     = 750     -- rule appears this long before the BG line its
 -- over the separator; it fades back in over those last px as it arrives.
 local BG_HIDE_ROWS    = 1
 local BG_HIDE_FADE_MS = 250
-local BG_HIDE_RAMP    = 40
+local BG_HIDE_RAMP    = 46
 
 -- ── Fill ────────────────────────────────────────────────────────────────────
 local MAIN_FILL_MODE = "sweep"      -- "sweep" | "instant"
@@ -180,6 +181,13 @@ local BG_FILL_MODE   = "sweep"
 -- Exact for a monospace face; used for the dots' x position and the
 -- separator's label gap.
 local CHAR_ADV_RATIO = 0.4698
+-- Letter-spacing on every lyric line, Main and BG, written as an \fsp tag.
+-- It has to be a tag: Aegisub will not take a negative Spacing in a style,
+-- and libass ignores one there. At fontsize 92, -1.7 makes the average gap
+-- between letters 80% of what it was at fontsize 80 with Spacing 1 (measured
+-- on Consolas Bold renders). Section labels, countdowns and markers keep the
+-- style's Spacing.
+local LYRIC_FSP = -1.7
 
 -- ── Layers (higher draws on top) ────────────────────────────────────────────
 local LAYER_ROW     = 10
@@ -230,10 +238,14 @@ local function fmt_mmss(ms)
     return string.format("%d:%02d", math.floor(s / 60), s % 60)
 end
 
--- Width of one character in a style, px (see CHAR_ADV_RATIO).
+-- Width of one character of a lyric line in a style, px: the advance with
+-- LYRIC_FSP in place of the style's Spacing (see CHAR_ADV_RATIO).
 local function char_advance(style)
-    return (CHAR_ADV_RATIO * style.fontsize + (style.spacing or 0)) * (style.scale_x or 100) / 100
+    return (CHAR_ADV_RATIO * style.fontsize + LYRIC_FSP) * (style.scale_x or 100) / 100
 end
+
+-- The \fsp tag every lyric line carries.
+local FSP_TAG = string.format("\\fsp%g", LYRIC_FSP)
 
 -- Quadratic ease-out: fast start, gentle stop.
 local function ease(u)
@@ -609,8 +621,8 @@ end
 local function item_body(it, styles, t0)
     local st = styles["Main"]
     if it.kind == "line" then
-        if t0 < it.fin then return units_at(it.units, t0 - it.start), "" end
-        return it.plain, ""
+        if t0 < it.fin then return units_at(it.units, t0 - it.start), FSP_TAG end
+        return it.plain, FSP_TAG
     elseif it.kind == "section" then
         local label = SECTION_UPPER and it.label:upper() or it.label
         return label, string.format("\\fs%d%s\\c%s", SECTION_FS, SECTION_ITALIC and "\\i1" or "", st.color2)
@@ -1043,7 +1055,7 @@ local function emit_bg_separator(subs, bg_lines, merged, styles)
             "{\\an7\\pos(%d,%d)\\p1\\fscx100\\fscy100\\bord0\\shad0\\c%s%s%s}%s",
             x0, y0, st.color2, alpha_tag(SEP_LINE_ALPHA), fade, draw)))
         subs.append(new_event(template, LAYER_SEP, w.s, w.e, string.format(
-            "{\\an5\\pos(%d,%d)\\fs%d\\fsp%d\\c%s%s%s}%s",
+            "{\\an5\\pos(%d,%d)\\fs%d\\fsp%d\\bord0\\c%s%s%s}%s",
             X_CENTER, SEP_Y, SEP_FS, SEP_FSP, st.color2, alpha_tag(SEP_LABEL_ALPHA), fade, SEP_LABEL)))
     end
     aegisub.debug.out(string.format("BG separator: %d window(s)\n", #merged))
@@ -1063,14 +1075,14 @@ local function build_bg_leadin(subs, bg_lines, styles, layout, wins)
             lead.layer      = LAYER_BG
             lead.start_time = lead_start
             lead.end_time   = line.start_time
-            lead.text = string.format("{\\an5\\pos(%d,%d)\\c%s}%s",
-                X_CENTER, y, secondary, plain_text(line.text))
+            lead.text = string.format("{\\an5\\pos(%d,%d)%s\\c%s}%s",
+                X_CENTER, y, FSP_TAG, secondary, plain_text(line.text))
             subs.append(lead)
         end
         local active = deepcopy(line)
         active.layer = LAYER_BG
-        active.text  = string.format("{\\an5\\pos(%d,%d)}%s",
-            X_CENTER, y, apply_fill_mode(line.text, BG_FILL_MODE))
+        active.text  = string.format("{\\an5\\pos(%d,%d)%s}%s",
+            X_CENTER, y, FSP_TAG, apply_fill_mode(line.text, BG_FILL_MODE))
         subs.append(active)
         if layout[i].cue then
             local st = styles["BG"]

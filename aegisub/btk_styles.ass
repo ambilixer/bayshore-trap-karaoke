@@ -4,7 +4,8 @@
 ; btk_styles.ass: the Main and BG lyric styles, and nothing else. Import them
 ; into a track's _subs-timed.ass with Aegisub's Style Manager (see HOWTO.md)
 ; before running the Karaoke Formatting v2 macro. check_styles.py compares a
-; finished track's styles against these values.
+; finished track's styles against these values. The letter-spacing on lyric
+; lines comes from the macro (LYRIC_FSP), not from the Spacing field here.
 Title: bayshore-trap-karaoke lyric styles
 ScriptType: v4.00+
 WrapStyle: 0
@@ -15,8 +16,8 @@ PlayResY: 1080
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Main,Consolas,80,&H0040DEB9,&H00767A6E,&H00000000,&HAA000000,-1,0,0,0,90,100,1,0,1,0,2.5,5,40,40,0,1
-Style: BG,Consolas,80,&H00646EF7,&H00595C69,&H00000000,&HAA000000,-1,0,0,0,90,100,1,0,1,0,2.5,2,40,40,260,1
+Style: Main,Consolas,92,&H0040DEB9,&H00888888,&H00372452,&HAA000000,-1,0,0,0,90,100,1,0,1,2,2.5,5,40,40,0,1
+Style: BG,Consolas,92,&H00646EF7,&H006D707D,&H00372452,&HAA000000,-1,0,0,0,90,100,1,0,1,2,2.5,2,40,40,260,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

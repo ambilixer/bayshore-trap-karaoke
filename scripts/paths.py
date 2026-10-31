@@ -12,6 +12,10 @@ below, which put tracks/ inside the repository and track_db.json beside it.
 Windows paths in config.toml need single quotes or forward slashes. Inside
 double quotes a backslash starts an escape sequence and the file will not
 load.
+
+Anything in config.toml that is not one of the settings below is reported as
+a warning, most usefully a setting under the wrong [section], which would
+otherwise be ignored without a word.
 """
 
 import sys
@@ -40,6 +44,47 @@ def _load_config() -> dict:
 
 
 _CONFIG = _load_config()
+
+# Every setting config.toml can hold, by section.
+_KNOWN = {
+    "paths":  ("tracks_dir", "db_path"),
+    "python": ("stems", "karaoke"),
+    "models": ("model_dir",),
+}
+
+
+def _check_config() -> None:
+    """Warn about anything in config.toml that this file does not read.
+
+    TOML files every key under the [section] above it, so tracks_dir written
+    below [models] is read as a models setting, and the default tracks folder
+    is used instead. Warnings go to stderr and do not stop the run. Every
+    script imports this file, so each step of a pipeline run repeats them.
+    """
+    home = {key: section for section, keys in _KNOWN.items() for key in keys}
+
+    def warn(msg: str) -> None:
+        print(f"WARNING: {CONFIG_PATH}: {msg}", file=sys.stderr)
+
+    for section, body in _CONFIG.items():
+        if not isinstance(body, dict):
+            # A key above the first [section] header.
+            where = f"; it belongs under [{home[section]}]" if section in home else ""
+            warn(f"{section} is not under any [section]{where}. Ignored.")
+            continue
+        if section not in _KNOWN:
+            warn(f"unknown section [{section}]. Everything in it is ignored.")
+        for key in body:
+            if section in _KNOWN and key in _KNOWN[section]:
+                continue
+            if key in home:
+                warn(f"{key} is under [{section}] but belongs under [{home[key]}]. "
+                     f"Ignored; the default is used.")
+            elif section in _KNOWN:
+                warn(f"unknown setting {key} under [{section}]. Ignored.")
+
+
+_check_config()
 
 
 def _path(section: str, key: str, default: Path) -> Path:

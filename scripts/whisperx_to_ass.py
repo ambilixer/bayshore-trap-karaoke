@@ -86,11 +86,13 @@ FALLBACK_WORD_DUR = 0.15
 INTERP_MAX_WORD_DUR = 0.6
 
 # Lines longer than this are split in two (and warned about). Derived from the
-# Main style, Consolas bold fs80 at ScaleX 90 and Spacing 1: about 34.7 px per
-# character, so 48 characters keep ~110px side margins. libass wraps at 52, and
-# a wrapped line lands on top of its neighbour because the macro places every
-# row with \pos. Mirrored in check_styles.py and score_timing.py.
-LONG_LINE_WARN = 48
+# Main style, Consolas bold fs92 at ScaleX 90, drawn by the macro with \fsp
+# -1.7: about 37.4 px per character. At 44 characters a cued line's entry-cue
+# dots stay on frame (45 would still fit inside ~110px side margins). libass
+# wraps at 49, and a wrapped line lands on top of its neighbour because the
+# macro places every row with \pos. Mirrored in check_styles.py and
+# score_timing.py, and marked by the ruler initialize_track.py seeds.
+LONG_LINE_WARN = 44
 
 # Syllabifier language
 SYLLABLE_LANG = 'en_US'

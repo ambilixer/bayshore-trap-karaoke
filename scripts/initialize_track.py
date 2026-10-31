@@ -10,7 +10,7 @@ Step 0. Sets up a new track:
   3. Asks for the listing details (genre, subgenre, mood, extra tags) and
      writes <track_id>_yt.json
   4. Creates <track_id>_lyr.txt, seeded with a short guide and a ruler that
-     marks the 48-character line limit
+     marks the 44-character line limit
   5. Downloads the audio from YouTube with yt-dlp as <track_id>_original.wav
   6. Prints the audio's duration, sample rate, channels, bitrate and file size
 
@@ -43,12 +43,13 @@ from pathlib import Path
 
 from paths import TRACKS_DIR
 
-# Seeded at the top of every new _lyr.txt. The | sits at column 48, the longest
-# line that fits on screen once split; # lines are ignored by every reader.
+# Seeded at the top of every new _lyr.txt. The | sits at column 44, the longest
+# line that fits on screen once split (LONG_LINE_WARN in whisperx_to_ass.py);
+# # lines are ignored by every reader. The guide lines stay inside the ruler.
 LYRICS_TEMPLATE = (
-    "# One line per subtitle line, none past the |\n"
-    "# Backing vocals (like this). Headers [Verse 1]\n"
-    "#.......10........20........30........40.......|\n"
+    "# One line per subtitle line, none past |\n"
+    "# Backing (like this). Headers [Verse 1]\n"
+    "#.......10........20........30........40...|\n"
 )
 
 
