@@ -19,7 +19,7 @@ flowchart TD
 
     M0["<b>Start a Track</b><br/>run_pipeline.py with a track ID and a YouTube link<br/>you input the track's details when asked<br/>(artist, title, album, year, genre)"]
     S0["<b>Step 0 · Set Up the Track</b><br/>creates the folder · downloads the audio<br/>starts _lyr.txt"]
-    M1["<b>Paste the Lyrics into _lyr.txt</b><br/>you input the lyrics, e.g. from Genius<br/>keep [Section] headers · BG lines in (parentheses)<br/>every line within the 48-character ruler"]
+    M1["<b>Paste the Lyrics into _lyr.txt</b><br/>you input the lyrics, e.g. from Genius<br/>keep [Section] headers · BG lines in (parentheses)<br/>every line within the 44-character ruler"]
     S13["<b>Steps 1 to 3 · First Draft</b><br/>separate the vocals · align the lyrics to them<br/>write _subs.ass with a timing for every syllable"]
     M2["<b>Tap Tool</b> (btk_tap.html, in a browser)<br/>tap along with J and K, one tap per syllable<br/>about 10 minutes · export _subs-tap.ass"]
     G{{"<b>Export Gate</b> · score_timing.py --check"}}

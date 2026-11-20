@@ -90,6 +90,8 @@ karaoke = 'C:\venvs\karaoke\Scripts\python.exe'
 
 **Use single quotes around Windows paths** (or forward slashes). Inside double quotes a backslash starts an escape sequence and the file won't load; the pipeline stops and says so.
 
+**Each setting must sit under its own `[section]` header.** A setting goes with the header above it, so `tracks_dir` written below `[models]` would not be read as a path. The pipeline warns about any setting it doesn't recognise where it is, and names the section it belongs under.
+
 ## 5. Aegisub setup
 
 ### The macro
@@ -103,7 +105,7 @@ Aegisub loads every `.lua` file it finds there, in subfolders too. Don't copy th
 
 ### The lyric styles
 
-The look of the lyrics (font, size, colours, shadow, position) lives in two Aegisub styles, **Main** and **BG**, and the macro's layout is built around their exact values. `aegisub\btk_styles.ass` holds both. Put them into Aegisub's style storage once, and every track can pick them up from there:
+The look of the lyrics (font, size, colours, outline, shadow, position) lives in two Aegisub styles, **Main** and **BG**, and the macro's layout is built around their exact values. `aegisub\btk_styles.ass` holds both. Put them into Aegisub's style storage once, and every track can pick them up from there:
 
 1. In Aegisub, open `aegisub\btk_styles.ass` (**File > Open Subtitles**).
 2. Open **Subtitle > Styles Manager**. At the top, next to the catalog list, click **New** and name the catalog, for example `btk`.
@@ -111,18 +113,20 @@ The look of the lyrics (font, size, colours, shadow, position) lives in two Aegi
 
 For each track later, you copy them back the other way (section 6.4).
 
-These are the values in the template, for reference. `check_styles.py` prints the ones in each finished track so you can spot a difference:
+These are the values in the template, for reference. `check_styles.py` compares the styles in each finished track with the template and lists any field that differs:
 
 | | Main | BG |
 |---|---|---|
-| Font | Consolas, bold, size 80 | Consolas, bold, size 80 |
+| Font | Consolas, bold, size 92 | Consolas, bold, size 92 |
 | Scale X / Y, spacing | 90% / 100%, spacing 1 | 90% / 100%, spacing 1 |
 | Primary colour (sung) | `#B9DE40` lime | `#F76E64` coral |
-| Secondary colour (unsung) | `#6E7A76` | `#695C59` |
-| Outline / shadow | 0 / 2.5, shadow black at alpha `AA` | the same |
+| Secondary colour (unsung) | `#888888` | `#7D706D` |
+| Outline / shadow | 2 in `#522437` / 2.5, shadow black at alpha `AA` | the same |
 | Alignment, margins (L / R / V) | 5, 40 / 40 / 0 | 2, 40 / 40 / 260 |
 
-If you change a style, note that ASS stores colours as `&HAABBGGRR`: blue and red are swapped compared with the `#RRGGBB` you would type elsewhere. And mind the size: the layout and the 48-character line limit both depend on it.
+The macro draws every lyric line with a letter-spacing of -1.7 (`\fsp-1.7`), which closes up the gaps between letters. Aegisub won't accept a negative spacing in a style, and the renderer would ignore one there, so it lives in the macro instead; the spacing of 1 above only shows in Aegisub's own preview.
+
+If you change a style, note that ASS stores colours as `&HAABBGGRR`: blue and red are swapped compared with the `#RRGGBB` you would type elsewhere. And mind the size: the layout and the 44-character line limit both depend on it.
 
 ---
 
@@ -145,7 +149,7 @@ It asks for the track's details (title, artist, album, year, BPM, and who reques
 
 The pipeline pauses. Open `<track>_lyr.txt` in the track folder and paste the lyrics below the three lines starting with `#`. They're instructions for you, and every script ignores them.
 
-- **One line per on-screen line.** The third `#` line is a ruler: its `|` marks 48 characters. Split anything longer by hand, at a natural break; a longer line gets split automatically, at the word nearest its middle.
+- **One line per on-screen line.** The third `#` line is a ruler: its `|` marks 44 characters. Split anything longer by hand, at a natural break; a longer line gets split automatically, at the word nearest its middle.
 - **Background vocals** go on their own line, in parentheses: `(yeah, okay)`. They're shown in their own zone below the main lyrics.
 - **Keep section headers** like `[Verse 1]`, `[Chorus]`, `[Bridge]` on their own lines. They become the section labels on screen. Everything after a colon is dropped, so write `[Final Chorus]`, not `[Chorus: Final]`.
 - **Check the words against what is actually sung.** The tap tool expects one tap per syllable, so a missing or extra word costs you a tap and throws the rest of that line out.
@@ -292,10 +296,12 @@ The colours of the cards are constants at the top of `render_titles.py`; the lyr
 | Step 1 takes 20 minutes or more | The stems environment has a CPU-only PyTorch. Reinstall it with the command in section 3, and check for `True`. |
 | `No module named pyphen` or `whisperx not found` | A step 2 or 3 script was run with the wrong Python. Check `[python]` in `config.toml`, or run it with the karaoke environment's `python.exe`. |
 | `config.toml is not valid TOML` | A Windows path in double quotes. Use single quotes. |
+| A warning that a setting `belongs under` another section | It sits under the wrong `[section]` header in `config.toml` and is being ignored. Move it under the header named. |
 | `Unknown argument: --from-step=6` | `--from-step`, `--preset` and `--bg-color` need a space: `--from-step 6`. |
 | The macro isn't in the Automation menu, or appears twice | It isn't in the autoload folder, or there's a second copy there. Keep exactly one `btk_karaoke_v2.lua`, and restart Aegisub. |
 | The macro stops with `ABORT ... this file is macro OUTPUT` | It was run on a `_subs-final.ass`. Open `_subs-timed.ass` and run it there. |
-| A lyric line sits on top of the next one | The line is longer than about 52 characters and wrapped. Split it in `_subs-timed.ass` and rerun the macro. |
+| A lyric line sits on top of the next one | The line is longer than about 49 characters and wrapped. Split it in `_subs-timed.ass` and rerun the macro. |
 | The tap tool shows the wrong number of syllables for a word | Check the word in `_lyr.txt` first, then use `S` and fix the split in Aegisub. |
 | Step 6 refuses: `output already exists` | Add `--overwrite`. |
+| The style check says the styles differ from `btk_styles.ass` | The styles in Aegisub's storage are older than the template, or were changed by hand. Copy Main and BG from `aegisub\btk_styles.ass` into storage again (section 5), apply them to `_subs-timed.ass` and rerun the macro. |
 | The style check warns about the BG stack and the control bar | Expected. A stacked pair of BG lines is rare, and the overlap is accepted. |
